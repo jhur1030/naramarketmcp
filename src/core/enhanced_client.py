@@ -51,10 +51,10 @@ class EnhancedAPIClient:
 
         # Service base URLs
         self.service_urls = {
-            "public_data_standard": "http://apis.data.go.kr/1230000/ao/PubDataOpnStdService",
-            "procurement_statistics": "http://apis.data.go.kr/1230000/at/PubPrcrmntStatInfoService",
-            "product_list": "http://apis.data.go.kr/1230000/ao/ThngListInfoService",
-            "shopping_mall": "http://apis.data.go.kr/1230000/at/ShoppingMallPrdctInfoService"
+            "public_data_standard": "https://apis.data.go.kr/1230000/ao/PubDataOpnStdService",
+            "procurement_statistics": "https://apis.data.go.kr/1230000/at/PubPrcrmntStatInfoService",
+            "product_list": "https://apis.data.go.kr/1230000/ao/ThngListInfoService",
+            "shopping_mall": "https://apis.data.go.kr/1230000/at/ShoppingMallPrdctInfoService"
         }
 
         # Operation mappings for each service

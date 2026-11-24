@@ -32,7 +32,7 @@ class OpenAPITools:
     
     def __init__(self):
         self.service_key = get_service_key()
-        self.base_url = "http://apis.data.go.kr/1230000"
+        self.base_url = "https://apis.data.go.kr/1230000"
     
     def get_bid_announcement_info(
         self,

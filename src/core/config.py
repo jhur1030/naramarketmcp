@@ -20,11 +20,11 @@ MAX_RETRIES = 3
 RETRY_BACKOFF_BASE = 0.75
 
 # 기존 API 엔드포인트 (호환성 유지)
-BASE_LIST_URL = "http://apis.data.go.kr/1230000/at/ShoppingMallPrdctInfoService/getShoppingMallPrdctInfoList"
+BASE_LIST_URL = "https://apis.data.go.kr/1230000/at/ShoppingMallPrdctInfoService/getShoppingMallPrdctInfoList"
 G2B_DETAIL_URL = "https://shop.g2b.go.kr/gm/gms/gmsf/GdsDtlInfo/selectPdctAtrbInfo.do"
 
 # OpenAPI 기본 URL
-OPENAPI_BASE_URL = "http://apis.data.go.kr/1230000"
+OPENAPI_BASE_URL = "https://apis.data.go.kr/1230000"
 OPENAPI_SPEC_PATH = "openapi.yaml"
 
 G2B_HEADERS = {
@@ -129,6 +129,9 @@ def get_service_key() -> str:
             logger.error("API service key not found in configuration")
             raise ValueError("naramarketServiceKey is required. Set via smithery.ai config or NARAMARKET_SERVICE_KEY environment variable")
         
+        # 복사 과정에서 섞인 줄바꿈/공백 제거
+        key = "".join(str(key).split())
+
         # Validate key format (should not be placeholder)
         if key in ["your-api-key-here", "SECURE_API_KEY_REQUIRED", "", "null", "undefined"]:
             logger.error("Invalid or placeholder API key detected")
