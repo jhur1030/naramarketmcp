@@ -250,6 +250,10 @@ def _paged(operation: str, params: Dict[str, Any], max_pages: int) -> List[Dict[
         except Exception as e:  # noqa: BLE001
             logger.warning("%s page %s failed: %s", operation, page, e)
             break
+        header = data.get("response", {}).get("header", {}) if isinstance(data, dict) else {}
+        if header.get("resultCode") not in (None, "00"):
+            logger.warning("%s error %s: %s", operation, header.get("resultCode"), header.get("resultMsg"))
+            break
         items = _items(data)
         out.extend(items)
         total = _to_num(data.get("response", {}).get("body", {}).get("totalCount")) or 0
@@ -266,6 +270,7 @@ def search_bids_with_attachment(
     use_estimated_price_if_no_base: bool = True,
     max_pages: int = 10,
     max_results: int = 50,
+    chunk_days: int = 3,
 ) -> Dict[str, Any]:
     from datetime import datetime, timedelta
 
@@ -274,14 +279,25 @@ def search_bids_with_attachment(
     keywords = attachment_keywords if attachment_keywords is not None else ["공내역", "내역서"]
     end = datetime.now()
     start = end - timedelta(days=min(days_back, 31))
-    rng = {"inqryDiv": 1, "inqryBgnDt": start.strftime("%Y%m%d0000"), "inqryEndDt": end.strftime("%Y%m%d2359")}
-
     op = BID_OPERATIONS[business_type]
-    bids = _paged(op, rng, max_pages)
+
+    # API 조회기간 제한(26.11 조정)에 대비해 짧은 구간으로 나눠 조회
+    windows = []
+    cur = start
+    while cur < end:
+        nxt = min(cur + timedelta(days=chunk_days), end)
+        windows.append({"inqryDiv": 1, "inqryBgnDt": cur.strftime("%Y%m%d%H%M"), "inqryEndDt": nxt.strftime("%Y%m%d%H%M")})
+        cur = nxt
+
+    bids: List[Dict[str, Any]] = []
+    base_rows: List[Dict[str, Any]] = []
+    for w in windows:
+        bids.extend(_paged(op, w, max_pages))
+        base_rows.extend(_paged(f"{op}BsisAmount", w, max_pages))
 
     # 기초금액 조회 (공고와 별도 오퍼레이션)
     base_map: Dict[str, float] = {}
-    for b in _paged(f"{op}BsisAmount", rng, max_pages):
+    for b in base_rows:
         amt = _to_num(b.get("bssamt"))
         if amt is not None:
             base_map[f"{b.get('bidNtceNo')}-{b.get('bidNtceOrd')}"] = amt
