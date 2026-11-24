@@ -455,7 +455,7 @@ def get_recent_bid_announcements(num_rows: int = 5, days_back: int = 7) -> Dict[
     from datetime import datetime, timedelta
 
     end = datetime.now()
-    start = end - timedelta(days=days_back)
+    start = end.replace(hour=0, minute=0)  # API는 같은 날짜 안에서만 조회 가능
     return enhanced_tools.call_public_data_standard_api(
         operation="getDataSetOpnStdBidPblancInfo",
         numOfRows=num_rows,
@@ -481,7 +481,7 @@ def get_successful_bids_by_business_type(
     codes = {"물품": "1", "외자": "2", "공사": "3", "용역": "5"}
     code = codes.get(business_type, "1")
     end = datetime.now()
-    start = end - timedelta(days=days_back)
+    start = end.replace(hour=0, minute=0)  # API는 같은 날짜 안에서만 조회 가능
     return enhanced_tools.call_public_data_standard_api(
         operation="getDataSetOpnStdScsbidInfo",
         numOfRows=num_rows,

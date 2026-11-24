@@ -27,6 +27,17 @@ HEADERS = {
 MAX_BYTES = 20 * 1024 * 1024
 
 
+def _get(url: str, params: Dict[str, Any], timeout: int) -> requests.Response:
+    """403이면 인증키 파라미터 이름/주소를 바꿔 재시도."""
+    r = requests.get(url, params=params, timeout=timeout)
+    if r.status_code == 403:
+        p2 = {("ServiceKey" if k == "serviceKey" else k): v for k, v in params.items()}
+        r = requests.get(url, params=p2, timeout=timeout)
+    if r.status_code == 403 and url.startswith("https://"):
+        r = requests.get("http://" + url[len("https://"):], params=params, timeout=timeout)
+    return r
+
+
 def _items(data: Dict[str, Any]) -> List[Dict[str, Any]]:
     body = data.get("response", {}).get("body", {}) or {}
     items = body.get("items") or []
@@ -50,7 +61,7 @@ def _query_bid(bid_ntce_no: str, bid_ntce_ord: Optional[str], business_type: Opt
             "bidNtceNo": bid_ntce_no,
         }
         try:
-            r = requests.get(f"{BID_BASE}/{BID_OPERATIONS[t]}", params=params, timeout=20)
+            r = _get(f"{BID_BASE}/{BID_OPERATIONS[t]}", params, 20)
             r.raise_for_status()
             data = r.json()
             err = _api_error(data)
@@ -266,7 +277,7 @@ def _paged(operation: str, params: Dict[str, Any], max_pages: int) -> List[Dict[
     for page in range(1, max_pages + 1):
         p = dict(params, serviceKey=get_service_key(), pageNo=page, numOfRows=999, type="json")
         try:
-            r = requests.get(f"{BID_BASE}/{operation}", params=p, timeout=30)
+            r = _get(f"{BID_BASE}/{operation}", p, 30)
             r.raise_for_status()
             data = r.json()
         except Exception as e:  # noqa: BLE001
@@ -303,25 +314,17 @@ def search_bids_with_attachment(
     start = end - timedelta(days=min(days_back, 31))
     op = BID_OPERATIONS[business_type]
 
-    # API 조회기간 제한(26.11 조정)에 대비해 짧은 구간으로 나눠 조회 (범위초과 시 더 잘게)
-    def collect(chunk_hours: int):
-        API_ERRORS.clear()
-        b_all: List[Dict[str, Any]] = []
-        base_all: List[Dict[str, Any]] = []
-        cur = start
-        while cur < end:
-            nxt = min(cur + timedelta(hours=chunk_hours), end)
-            w = {"inqryDiv": 1, "inqryBgnDt": cur.strftime("%Y%m%d%H%M"), "inqryEndDt": nxt.strftime("%Y%m%d%H%M")}
-            b_all.extend(_paged(op, w, max_pages))
-            base_all.extend(_paged(f"{op}BsisAmount", w, max_pages))
-            cur = nxt
-        return b_all, base_all
-
-    bids, base_rows = collect(chunk_days * 24)
-    if any("07:" in e for e in API_ERRORS):
-        bids, base_rows = collect(24)
-    if not bids and any("07:" in e for e in API_ERRORS):
-        bids, base_rows = collect(6)
+    # API 조회기간 제한(26.11 조정): 같은 날짜 안에서만 조회 가능 → 하루씩 나눠 조회
+    API_ERRORS.clear()
+    bids: List[Dict[str, Any]] = []
+    base_rows: List[Dict[str, Any]] = []
+    day = start.replace(hour=0, minute=0, second=0, microsecond=0)
+    while day <= end:
+        d_end = min(day.replace(hour=23, minute=59), end)
+        w = {"inqryDiv": 1, "inqryBgnDt": day.strftime("%Y%m%d%H%M"), "inqryEndDt": d_end.strftime("%Y%m%d%H%M")}
+        bids.extend(_paged(op, w, max_pages))
+        base_rows.extend(_paged(f"{op}BsisAmount", w, max_pages))
+        day += timedelta(days=1)
 
     # 기초금액 조회 (공고와 별도 오퍼레이션)
     base_map: Dict[str, float] = {}
