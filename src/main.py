@@ -528,6 +528,42 @@ def search_shopping_mall_products(
     )
 
 
+# ── Attachment Tools ────────────────────────────────────────────────────────
+
+
+@mcp.tool()
+def get_bid_attachments(
+    bid_ntce_no: str,
+    bid_ntce_ord: Optional[str] = None,
+    business_type: Optional[str] = None,
+    read_contents: bool = True,
+    excel_only: bool = False,
+    max_rows_per_sheet: int = 200,
+) -> Dict[str, Any]:
+    """입찰공고 첨부파일 목록을 가져오고, 엑셀(xlsx/xls)·ZIP 속 엑셀·PDF 내용을 텍스트로 읽어 반환.
+
+    공고 내역서/물량내역서/규격서 엑셀 내용을 확인할 때 사용.
+    Args:
+        bid_ntce_no: 입찰공고번호 (예: "R25BK00123456")
+        bid_ntce_ord: 공고차수 (선택, 예: "000")
+        business_type: "물품", "용역", "공사", "외자" 중 하나 (선택, 모르면 전체 검색)
+        read_contents: 파일 내용까지 읽을지 여부 (기본 True)
+        excel_only: 엑셀/ZIP 파일만 읽기 (기본 False)
+        max_rows_per_sheet: 시트당 최대 행 수 (기본 200)
+    """
+    from .tools.attachment_tools import get_bid_attachments as _impl
+
+    return _impl(bid_ntce_no, bid_ntce_ord, business_type, read_contents, excel_only, max_rows_per_sheet)
+
+
+@mcp.tool()
+def read_attachment_url(url: str, file_name: str = "첨부파일", max_rows_per_sheet: int = 200) -> Dict[str, Any]:
+    """첨부파일 다운로드 URL 하나를 직접 받아 엑셀/PDF 내용을 텍스트로 반환."""
+    from .tools.attachment_tools import read_attachment_url as _impl
+
+    return _impl(url, file_name, max_rows_per_sheet)
+
+
 # ── Health Check ────────────────────────────────────────────────────────────
 
 
