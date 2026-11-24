@@ -677,6 +677,9 @@ def main():
                 app = mcp.sse_app()
 
             app.add_middleware(SmitheryCompatibilityMiddleware)
+            from .core.access_token import AccessTokenMiddleware
+
+            app.add_middleware(AccessTokenMiddleware)
             app.add_middleware(
                 CORSMiddleware,
                 allow_origins=["*"],
