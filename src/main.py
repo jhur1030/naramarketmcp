@@ -564,6 +564,32 @@ def read_attachment_url(url: str, file_name: str = "첨부파일", max_rows_per_
     return _impl(url, file_name, max_rows_per_sheet)
 
 
+@mcp.tool()
+def search_bids_with_attachment(
+    business_type: str = "공사",
+    min_base_amount: float = 5_000_000_000,
+    days_back: int = 14,
+    attachment_keywords: Optional[list] = None,
+    use_estimated_price_if_no_base: bool = True,
+    max_results: int = 50,
+) -> Dict[str, Any]:
+    """조건 검색: 업무구분 + 기초금액 하한 + 첨부파일명 키워드(기본 "공내역","내역서")로 입찰공고를 찾음.
+
+    예) 공사 기초금액 50억 이상, 공내역서 첨부된 공고 → business_type="공사", min_base_amount=5000000000
+    Args:
+        business_type: "공사", "용역", "물품", "외자"
+        min_base_amount: 최소 기초금액(원). 50억 = 5000000000
+        days_back: 공고일 기준 최근 며칠 (최대 31)
+        attachment_keywords: 첨부파일명에 포함될 단어 목록. 빈 리스트면 첨부 조건 없음
+        use_estimated_price_if_no_base: 기초금액 미공개 시 추정가격으로 대체 판단
+        max_results: 최대 결과 수
+    """
+    from .tools.attachment_tools import search_bids_with_attachment as _impl
+
+    return _impl(business_type, min_base_amount, days_back, attachment_keywords,
+                 use_estimated_price_if_no_base, 10, max_results)
+
+
 # ── Health Check ────────────────────────────────────────────────────────────
 
 

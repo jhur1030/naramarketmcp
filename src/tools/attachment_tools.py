@@ -226,3 +226,108 @@ def get_bid_attachments(
 
 def read_attachment_url(url: str, file_name: str = "첨부파일", max_rows_per_sheet: int = 200) -> Dict[str, Any]:
     return _read_file(url, file_name, max_rows_per_sheet)
+
+
+# ── 조건 검색: 공사 기초금액 + 첨부파일 키워드 ─────────────────────────────
+
+
+def _to_num(v: Any) -> Optional[float]:
+    try:
+        s = str(v).replace(",", "").strip()
+        return float(s) if s else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _paged(operation: str, params: Dict[str, Any], max_pages: int) -> List[Dict[str, Any]]:
+    out: List[Dict[str, Any]] = []
+    for page in range(1, max_pages + 1):
+        p = dict(params, serviceKey=get_service_key(), pageNo=page, numOfRows=999, type="json")
+        try:
+            r = requests.get(f"{BID_BASE}/{operation}", params=p, timeout=30)
+            r.raise_for_status()
+            data = r.json()
+        except Exception as e:  # noqa: BLE001
+            logger.warning("%s page %s failed: %s", operation, page, e)
+            break
+        items = _items(data)
+        out.extend(items)
+        total = _to_num(data.get("response", {}).get("body", {}).get("totalCount")) or 0
+        if len(items) < 999 or page * 999 >= total:
+            break
+    return out
+
+
+def search_bids_with_attachment(
+    business_type: str = "공사",
+    min_base_amount: float = 5_000_000_000,
+    days_back: int = 14,
+    attachment_keywords: Optional[List[str]] = None,
+    use_estimated_price_if_no_base: bool = True,
+    max_pages: int = 10,
+    max_results: int = 50,
+) -> Dict[str, Any]:
+    from datetime import datetime, timedelta
+
+    if business_type not in BID_OPERATIONS:
+        return {"success": False, "error": "business_type은 물품/용역/공사/외자 중 하나"}
+    keywords = attachment_keywords if attachment_keywords is not None else ["공내역", "내역서"]
+    end = datetime.now()
+    start = end - timedelta(days=min(days_back, 31))
+    rng = {"inqryDiv": 1, "inqryBgnDt": start.strftime("%Y%m%d0000"), "inqryEndDt": end.strftime("%Y%m%d2359")}
+
+    op = BID_OPERATIONS[business_type]
+    bids = _paged(op, rng, max_pages)
+
+    # 기초금액 조회 (공고와 별도 오퍼레이션)
+    base_map: Dict[str, float] = {}
+    for b in _paged(f"{op}BsisAmount", rng, max_pages):
+        amt = _to_num(b.get("bssamt"))
+        if amt is not None:
+            base_map[f"{b.get('bidNtceNo')}-{b.get('bidNtceOrd')}"] = amt
+
+    latest: Dict[str, Dict[str, Any]] = {}
+    for b in bids:  # 같은 공고는 최신 차수만
+        no = b.get("bidNtceNo")
+        if no and (no not in latest or str(b.get("bidNtceOrd", "")) > str(latest[no].get("bidNtceOrd", ""))):
+            latest[no] = b
+
+    results = []
+    for b in latest.values():
+        key = f"{b.get('bidNtceNo')}-{b.get('bidNtceOrd')}"
+        base = base_map.get(key)
+        basis = "기초금액"
+        if base is None and use_estimated_price_if_no_base:
+            base = _to_num(b.get("presmptPrce"))
+            basis = "추정가격(기초금액 미공개)"
+        if base is None or base < min_base_amount:
+            continue
+        atts = _extract_attachments(b)
+        matched = [a for a in atts if any(k in a["name"] for k in keywords)] if keywords else atts
+        if keywords and not matched:
+            continue
+        results.append({
+            "bid_ntce_no": b.get("bidNtceNo"),
+            "bid_ntce_ord": b.get("bidNtceOrd"),
+            "bid_ntce_nm": b.get("bidNtceNm"),
+            "ntce_instt": b.get("ntceInsttNm"),
+            "dminstt": b.get("dminsttNm"),
+            "amount": base,
+            "amount_basis": basis,
+            "amount_eok": round(base / 1e8, 2),
+            "bid_ntce_dt": b.get("bidNtceDt"),
+            "bid_close_dt": b.get("bidClseDt"),
+            "openg_dt": b.get("opengDt"),
+            "region_limit": b.get("prtcptLmtRgnNm") or b.get("rgnLmtYn"),
+            "detail_url": b.get("bidNtceDtlUrl") or b.get("bidNtceUrl"),
+            "matched_attachments": matched,
+        })
+    results.sort(key=lambda x: x["amount"], reverse=True)
+    return {
+        "success": True,
+        "period": f"{start:%Y-%m-%d} ~ {end:%Y-%m-%d}",
+        "scanned_bids": len(latest),
+        "matched_count": len(results),
+        "results": results[:max_results],
+        "note": "첨부 엑셀 내용은 get_bid_attachments(공고번호)로 확인",
+    }
