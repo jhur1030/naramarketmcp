@@ -13,3 +13,18 @@ services:
         value: http
       - key: FASTMCP_HOST
         value: 0.0.0.0
+  - type: web
+    name: naramarket-mcp-sg
+    runtime: docker
+    plan: free
+    region: singapore
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: NARAMARKET_SERVICE_KEY
+        sync: false
+      - key: MCP_ACCESS_TOKEN
+        sync: false
+      - key: FASTMCP_TRANSPORT
+        value: http
+      - key: FASTMCP_HOST
+        value: 0.0.0.0
