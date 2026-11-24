@@ -13,12 +13,12 @@ from ..core.config import get_service_key
 
 logger = logging.getLogger("naramarket.attachments")
 
-BID_BASE = "https://apis.data.go.kr/1230000/ad/BidPublicInfoService"
+BID_BASE = "https://apis.data.go.kr/1230000/ad/BidPublicInfoService02"  # 26.11 개편 주소
 BID_OPERATIONS = {
-    "물품": "getBidPblancListInfoThng",
-    "용역": "getBidPblancListInfoServc",
-    "공사": "getBidPblancListInfoCnstwk",
-    "외자": "getBidPblancListInfoFrgcpt",
+    "물품": "getBidPblancListInfoThng02",
+    "용역": "getBidPblancListInfoServc02",
+    "공사": "getBidPblancListInfoCnstwk02",
+    "외자": "getBidPblancListInfoFrgcpt02",
 }
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (compatible; naramarket-mcp/0.2)",
@@ -323,7 +323,7 @@ def search_bids_with_attachment(
         d_end = min(day.replace(hour=23, minute=59), end)
         w = {"inqryDiv": 1, "inqryBgnDt": day.strftime("%Y%m%d%H%M"), "inqryEndDt": d_end.strftime("%Y%m%d%H%M")}
         bids.extend(_paged(op, w, max_pages))
-        base_rows.extend(_paged(f"{op}BsisAmount", w, max_pages))
+        base_rows.extend(_paged(op[:-2] + "BsisAmount02", w, max_pages))
         day += timedelta(days=1)
 
     # 기초금액 조회 (공고와 별도 오퍼레이션)
