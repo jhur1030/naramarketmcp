@@ -26,7 +26,9 @@ Start-Sleep -Seconds 5
 if ($env:NGROK_DOMAIN) {
     Write-Host "휴대폰/Claude 커넥터 주소:" -ForegroundColor Green
     Write-Host "https://$($env:NGROK_DOMAIN)/mcp?token=$($env:MCP_ACCESS_TOKEN)" -ForegroundColor Yellow
-    ngrok http --domain=$env:NGROK_DOMAIN 8081
+    $ng = (Get-Command ngrok -ErrorAction SilentlyContinue).Source
+    if (-not $ng) { $ng = Join-Path $env:LOCALAPPDATA "Microsoft\WinGet\Links\ngrok.exe" }
+    & $ng http --domain=$env:NGROK_DOMAIN 8081
 } else {
     Write-Host "PC 전용 모드로 실행 중 (http://127.0.0.1:8081/mcp). 끄려면 이 창을 닫으세요." -ForegroundColor Green
     Wait-Process -Id $server.Id
