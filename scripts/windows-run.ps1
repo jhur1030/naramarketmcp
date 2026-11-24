@@ -10,8 +10,8 @@ try {
     if (Test-Path $tmp) { Remove-Item $tmp -Recurse -Force }
     Expand-Archive $zip $tmp -Force
     $src = Join-Path $tmp "naramarketmcp-main"
-    Copy-Item (Join-Path $src "src\*") (Join-Path $root "src") -Recurse -Force
-    Copy-Item (Join-Path $src "scripts\*") (Join-Path $root "scripts") -Recurse -Force
+    robocopy (Join-Path $src "src") (Join-Path $root "src") /E /NFL /NDL /NJH /NJS /NP | Out-Null
+    robocopy (Join-Path $src "scripts") (Join-Path $root "scripts") /E /NFL /NDL /NJH /NJS /NP | Out-Null
     Write-Host "최신 코드로 업데이트했습니다." -ForegroundColor Cyan
 } catch { Write-Host "업데이트 건너뜀: $($_.Exception.Message)" -ForegroundColor DarkYellow }
 Get-Content .env.local | ForEach-Object {
