@@ -1,4 +1,4 @@
-# 나라장터 MCP - 서버 켜기 (창을 닫으면 서버도 꺼집니다)
+﻿# 나라장터 MCP - 서버 켜기 (창을 닫으면 서버도 꺼집니다)
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
 Get-Content .env.local | ForEach-Object {
