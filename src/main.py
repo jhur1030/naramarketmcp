@@ -460,8 +460,8 @@ def get_recent_bid_announcements(num_rows: int = 5, days_back: int = 7) -> Dict[
         operation="getDataSetOpnStdBidPblancInfo",
         numOfRows=num_rows,
         pageNo=1,
-        bidNtceBgnDt=start.strftime("%Y%m%d0000"),
-        bidNtceEndDt=end.strftime("%Y%m%d2359"),
+        bidNtceBgnDt=start.strftime("%Y%m%d%H%M"),
+        bidNtceEndDt=end.strftime("%Y%m%d%H%M"),
     )
 
 
@@ -487,8 +487,8 @@ def get_successful_bids_by_business_type(
         numOfRows=num_rows,
         pageNo=1,
         bsnsDivCd=code,
-        opengBgnDt=start.strftime("%Y%m%d0000"),
-        opengEndDt=end.strftime("%Y%m%d2359"),
+        opengBgnDt=start.strftime("%Y%m%d%H%M"),
+        opengEndDt=end.strftime("%Y%m%d%H%M"),
     )
 
 

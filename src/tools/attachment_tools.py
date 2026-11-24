@@ -52,9 +52,13 @@ def _query_bid(bid_ntce_no: str, bid_ntce_ord: Optional[str], business_type: Opt
         try:
             r = requests.get(f"{BID_BASE}/{BID_OPERATIONS[t]}", params=params, timeout=20)
             r.raise_for_status()
-            items = _items(r.json())
+            data = r.json()
+            err = _api_error(data)
+            if err:
+                API_ERRORS.append(f"{t}: {err}")
+            items = _items(data)
         except Exception as e:  # noqa: BLE001
-            logger.warning("bid query failed (%s): %s", t, e)
+            API_ERRORS.append(f"{t}: {type(e).__name__} {str(e)[:120]}")
             continue
         for it in items:
             if bid_ntce_ord and str(it.get("bidNtceOrd", "")).lstrip("0") != str(bid_ntce_ord).lstrip("0"):
@@ -199,9 +203,11 @@ def get_bid_attachments(
     excel_only: bool = False,
     max_rows_per_sheet: int = 200,
 ) -> Dict[str, Any]:
+    API_ERRORS.clear()
     items = _query_bid(bid_ntce_no.strip(), bid_ntce_ord, business_type)
     if not items:
-        return {"success": False, "error": f"공고번호 {bid_ntce_no}를 찾지 못했습니다. 공고번호/업무구분을 확인하세요."}
+        return {"success": False, "error": f"공고번호 {bid_ntce_no}를 찾지 못했습니다. 공고번호/업무구분을 확인하세요.",
+                "api_errors": sorted(set(API_ERRORS))[:10]}
     item = items[-1]
     attachments = _extract_attachments(item)
     out: Dict[str, Any] = {
@@ -239,6 +245,22 @@ def _to_num(v: Any) -> Optional[float]:
         return None
 
 
+API_ERRORS: List[str] = []
+
+
+def _api_error(data: Any) -> Optional[str]:
+    if not isinstance(data, dict):
+        return None
+    for v in data.values():
+        if isinstance(v, dict) and "header" in v and "body" not in v:
+            h = v["header"]
+            return f'{h.get("resultCode")}:{h.get("resultMsg")}'
+    h = data.get("response", {}).get("header", {}) if isinstance(data.get("response"), dict) else {}
+    if h.get("resultCode") not in (None, "00"):
+        return f'{h.get("resultCode")}:{h.get("resultMsg")}'
+    return None
+
+
 def _paged(operation: str, params: Dict[str, Any], max_pages: int) -> List[Dict[str, Any]]:
     out: List[Dict[str, Any]] = []
     for page in range(1, max_pages + 1):
@@ -248,11 +270,11 @@ def _paged(operation: str, params: Dict[str, Any], max_pages: int) -> List[Dict[
             r.raise_for_status()
             data = r.json()
         except Exception as e:  # noqa: BLE001
-            logger.warning("%s page %s failed: %s", operation, page, e)
+            API_ERRORS.append(f"{operation}: {type(e).__name__} {str(e)[:120]}")
             break
-        header = data.get("response", {}).get("header", {}) if isinstance(data, dict) else {}
-        if header.get("resultCode") not in (None, "00"):
-            logger.warning("%s error %s: %s", operation, header.get("resultCode"), header.get("resultMsg"))
+        err = _api_error(data)
+        if err:
+            API_ERRORS.append(f"{operation} {params.get('inqryBgnDt')}~{params.get('inqryEndDt')}: {err}")
             break
         items = _items(data)
         out.extend(items)
@@ -281,19 +303,25 @@ def search_bids_with_attachment(
     start = end - timedelta(days=min(days_back, 31))
     op = BID_OPERATIONS[business_type]
 
-    # API 조회기간 제한(26.11 조정)에 대비해 짧은 구간으로 나눠 조회
-    windows = []
-    cur = start
-    while cur < end:
-        nxt = min(cur + timedelta(days=chunk_days), end)
-        windows.append({"inqryDiv": 1, "inqryBgnDt": cur.strftime("%Y%m%d%H%M"), "inqryEndDt": nxt.strftime("%Y%m%d%H%M")})
-        cur = nxt
+    # API 조회기간 제한(26.11 조정)에 대비해 짧은 구간으로 나눠 조회 (범위초과 시 더 잘게)
+    def collect(chunk_hours: int):
+        API_ERRORS.clear()
+        b_all: List[Dict[str, Any]] = []
+        base_all: List[Dict[str, Any]] = []
+        cur = start
+        while cur < end:
+            nxt = min(cur + timedelta(hours=chunk_hours), end)
+            w = {"inqryDiv": 1, "inqryBgnDt": cur.strftime("%Y%m%d%H%M"), "inqryEndDt": nxt.strftime("%Y%m%d%H%M")}
+            b_all.extend(_paged(op, w, max_pages))
+            base_all.extend(_paged(f"{op}BsisAmount", w, max_pages))
+            cur = nxt
+        return b_all, base_all
 
-    bids: List[Dict[str, Any]] = []
-    base_rows: List[Dict[str, Any]] = []
-    for w in windows:
-        bids.extend(_paged(op, w, max_pages))
-        base_rows.extend(_paged(f"{op}BsisAmount", w, max_pages))
+    bids, base_rows = collect(chunk_days * 24)
+    if any("07:" in e for e in API_ERRORS):
+        bids, base_rows = collect(24)
+    if not bids and any("07:" in e for e in API_ERRORS):
+        bids, base_rows = collect(6)
 
     # 기초금액 조회 (공고와 별도 오퍼레이션)
     base_map: Dict[str, float] = {}
@@ -346,4 +374,5 @@ def search_bids_with_attachment(
         "matched_count": len(results),
         "results": results[:max_results],
         "note": "첨부 엑셀 내용은 get_bid_attachments(공고번호)로 확인",
+        "api_errors": sorted(set(API_ERRORS))[:10],
     }
